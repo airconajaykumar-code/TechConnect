@@ -1,8 +1,22 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import type { Engineer, Task, EarningsRecord } from "@/lib/data";
-import { SUBSCRIPTION_PRICE, DEFAULT_COMMISSION_PERCENT } from "@/lib/data";
+import { db } from "@/lib/firebase";
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  getDocs,
+  query,
+  orderBy,
+  setDoc,
+  Timestamp,
+} from "firebase/firestore";
+import type { Engineer, Task } from "@/lib/data";
+import { SUBSCRIPTION_PRICE } from "@/lib/data";
 
 interface AppStore {
   engineers: Engineer[];
@@ -15,8 +29,23 @@ interface AppStore {
 
 const StoreContext = createContext<AppStore | null>(null);
 
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const engineersCol = collection(db, "engineers");
+const tasksCol = collection(db, "tasks");
+
+const seedEngineers: Omit<Engineer, "id">[] = [
+  { name: "Vikas Rajput", phone: "+91 88688 55921", email: "", profession: "CCTV Technician", skills: ["CCTV Installation", "Camera Setup", "DVR Config", "Networking", "Broadband Setup"], location: "Bareilly Road, Ambedkar Nagar, Haldwani, Nainital, Uttarakhand", bio: "CCTV Technician based in Haldwani with 8 years of experience in CCTV installation and networking.", experience: "8 years", joinedAt: "2025-07-01", subscription: { status: "active" as const, amount: 99, validTill: "2026-07-01" }, totalEarnings: 0, totalTasks: 0, rating: 0 },
+  { name: "Durgesh Bhardwaj", phone: "+91 98765 43210", email: "", profession: "Network Engineer", skills: ["Broadband Setup", "WiFi", "Cabling"], location: "Nawabi Road, Haldwani, Uttarakhand", joinedAt: "2025-07-01", subscription: { status: "active" as const, amount: 99, validTill: "2026-07-01" }, totalEarnings: 0, totalTasks: 0, rating: 0 },
+  { name: "Abhishek Bisht", phone: "+91 97531 24680", email: "", profession: "Electrical Specialist", skills: ["Electrical Wiring", "Repairs", "Lighting"], location: "Kusumkhera, Haldwani, Nainital, Uttarakhand", joinedAt: "2025-07-01", subscription: { status: "active" as const, amount: 99, validTill: "2026-07-01" }, totalEarnings: 0, totalTasks: 0, rating: 0 },
+  { name: "Ajay Kumar", phone: "+91 72173 57366", email: "", profession: "General Technician", skills: ["Smart Home", "Electrical", "Networking"], location: "Rajendra Nagar, Rajpura, Haldwani, Uttarakhand", joinedAt: "2025-07-01", subscription: { status: "active" as const, amount: 99, validTill: "2026-07-01" }, totalEarnings: 0, totalTasks: 0, rating: 0 },
+];
+
+async function seedIfEmpty() {
+  const snap = await getDocs(query(engineersCol, orderBy("name")));
+  if (snap.empty) {
+    for (const eng of seedEngineers) {
+      await addDoc(engineersCol, { ...eng, createdAt: Timestamp.now() });
+    }
+  }
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -25,81 +54,43 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const savedEng = localStorage.getItem("tc_engineers");
-    const savedTasks = localStorage.getItem("tc_tasks");
+    seedIfEmpty();
 
-    const SEED_PATCH: Record<string, Partial<Engineer>> = {
-      "seed-1": {
-        phone: "+91 88688 55921",
-        skills: ["CCTV Installation", "Camera Setup", "DVR Config", "Networking", "Broadband Setup"],
-        bio: "CCTV Technician based in Haldwani with 8 years of experience in CCTV installation and networking.",
-        experience: "8 years",
-      },
-    };
+    const unsubEng = onSnapshot(engineersCol, (snap) => {
+      const list: Engineer[] = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Engineer));
+      setEngineers(list);
+    });
 
-    const seedEngineers: Engineer[] = [
-      { id: "seed-1", name: "Vikas Rajput", phone: "+91 88688 55921", email: "", profession: "CCTV Technician", skills: ["CCTV Installation", "Camera Setup", "DVR Config", "Networking", "Broadband Setup"], location: "Bareilly Road, Ambedkar Nagar, Haldwani, Nainital, Uttarakhand", bio: "CCTV Technician based in Haldwani with 8 years of experience in CCTV installation and networking.", experience: "8 years", joinedAt: "2025-07-01", subscription: { status: "active", amount: 99, validTill: "2026-07-01" }, totalEarnings: 0, totalTasks: 0, rating: 0 },
-      { id: "seed-2", name: "Durgesh Bhardwaj", phone: "", email: "", profession: "Network Engineer", skills: ["Broadband Setup", "WiFi", "Cabling"], location: "Nawabi Road, Haldwani, Uttarakhand", joinedAt: "2025-07-01", subscription: { status: "active", amount: 99, validTill: "2026-07-01" }, totalEarnings: 0, totalTasks: 0, rating: 0 },
-      { id: "seed-3", name: "Abhishek Bisht", phone: "", email: "", profession: "Electrical Specialist", skills: ["Electrical Wiring", "Repairs", "Lighting"], location: "Kusumkhera, Haldwani, Nainital, Uttarakhand", joinedAt: "2025-07-01", subscription: { status: "active", amount: 99, validTill: "2026-07-01" }, totalEarnings: 0, totalTasks: 0, rating: 0 },
-      { id: "seed-4", name: "Ajay Kumar", phone: "", email: "", profession: "General Technician", skills: ["Smart Home", "Electrical", "Networking"], location: "Rajendra Nagar, Rajpura, Haldwani, Uttarakhand", joinedAt: "2025-07-01", subscription: { status: "active", amount: 99, validTill: "2026-07-01" }, totalEarnings: 0, totalTasks: 0, rating: 0 },
-    ];
+    const unsubTasks = onSnapshot(tasksCol, (snap) => {
+      const list: Task[] = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Task));
+      setTasks(list);
+      setLoaded(true);
+    });
 
-    if (savedEng) {
-      let parsed = JSON.parse(savedEng) as Engineer[];
-      if (parsed.length === 0) {
-        setEngineers(seedEngineers);
-      } else {
-        let changed = false;
-        parsed = parsed.map((e) => {
-          const patch = SEED_PATCH[e.id];
-          if (patch && patch.bio && !e.bio) {
-            changed = true;
-            return { ...e, ...patch };
-          }
-          return e;
-        });
-        if (changed) {
-          localStorage.setItem("tc_engineers", JSON.stringify(parsed));
-        }
-        setEngineers(parsed);
-      }
-    } else {
-      setEngineers(seedEngineers);
-    }
-    if (savedTasks) setTasks(JSON.parse(savedTasks));
-    setLoaded(true);
+    return () => { unsubEng(); unsubTasks(); };
   }, []);
 
-  useEffect(() => {
-    if (loaded) localStorage.setItem("tc_engineers", JSON.stringify(engineers));
-  }, [engineers, loaded]);
-
-  useEffect(() => {
-    if (loaded) localStorage.setItem("tc_tasks", JSON.stringify(tasks));
-  }, [tasks, loaded]);
-
-  function addEngineer(data: Omit<Engineer, "id" | "skills" | "email" | "joinedAt" | "subscription" | "totalEarnings" | "totalTasks" | "rating">) {
-    const engineer: Engineer = {
-      id: generateId(),
+  async function addEngineer(data: Omit<Engineer, "id" | "skills" | "email" | "joinedAt" | "subscription" | "totalEarnings" | "totalTasks" | "rating">) {
+    const engineer = {
       name: data.name,
       phone: data.phone,
       email: "",
       profession: data.profession,
-      skills: [],
+      skills: [] as string[],
       location: data.location || "",
       joinedAt: new Date().toISOString().split("T")[0],
-      subscription: { status: "active", amount: SUBSCRIPTION_PRICE, validTill: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0] },
+      subscription: { status: "active" as const, amount: SUBSCRIPTION_PRICE, validTill: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0] },
       totalEarnings: 0,
       totalTasks: 0,
       rating: 0,
+      createdAt: Timestamp.now(),
     };
-    setEngineers((prev) => [...prev, engineer]);
+    await addDoc(engineersCol, engineer);
   }
 
-  function addTask(data: Omit<Task, "id" | "status" | "commissionPercent" | "platformFee" | "engineerPayout" | "createdAt" | "paymentReceived"> & { commissionAmount: number }) {
+  async function addTask(data: Omit<Task, "id" | "status" | "commissionPercent" | "platformFee" | "engineerPayout" | "createdAt" | "paymentReceived"> & { commissionAmount: number }) {
     const platformFee = data.commissionAmount || 0;
-    const task: Task = {
-      id: generateId(),
+    const task = {
       title: data.title,
       description: data.description,
       customerName: data.customerName,
@@ -114,19 +105,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       createdAt: new Date().toISOString().split("T")[0],
       paymentReceived: false,
     };
-    setTasks((prev) => [...prev, task]);
+    await addDoc(tasksCol, task);
   }
 
-  function updateTaskStatus(id: string, status: Task["status"]) {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, status, completedAt: status === "completed" ? new Date().toISOString().split("T")[0] : t.completedAt } : t))
-    );
+  async function updateTaskStatus(id: string, status: Task["status"]) {
+    const payload: Record<string, unknown> = { status };
+    if (status === "completed") {
+      payload.completedAt = new Date().toISOString().split("T")[0];
+    }
+    await updateDoc(doc(tasksCol, id), payload);
   }
 
-  function markPaymentReceived(id: string) {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, paymentReceived: true } : t))
-    );
+  async function markPaymentReceived(id: string) {
+    await updateDoc(doc(tasksCol, id), { paymentReceived: true });
   }
 
   return (

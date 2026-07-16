@@ -68,7 +68,7 @@ export default function TaskDetailScreen({ route, navigation }: any) {
     );
   }
 
-  const commission = task.amount - task.yourPayout;
+  const commission = task.amount - task.engineerPayout;
   const adminShare = Math.round(commission * 0.5);
   const platformFee = commission - adminShare;
 
@@ -134,7 +134,7 @@ export default function TaskDetailScreen({ route, navigation }: any) {
           <View style={styles.divider} />
           <View style={styles.amtRow}>
             <Text style={styles.amtLabel}>Your Payout (Engineer)</Text>
-            <Text style={[styles.amtValue, { color: "#10B981", fontWeight: "800" }]}>₹{task.yourPayout}</Text>
+            <Text style={[styles.amtValue, { color: "#10B981", fontWeight: "800" }]}>₹{task.engineerPayout}</Text>
           </View>
           <View style={styles.amtRow}>
             <Text style={styles.amtLabel}>Admin Commission</Text>

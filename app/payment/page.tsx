@@ -1,17 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
-const UPI_ID = "techconnect@upi";
+const CONFIG_ID = "app-config";
+const configRef = doc(db, "config", CONFIG_ID);
 
 export default function PaymentPage() {
+  const [upiId, setUpiId] = useState("techconnect@upi");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
 
+  useEffect(() => {
+    getDoc(configRef).then((snap) => {
+      if (snap.exists() && snap.data().upiId) {
+        setUpiId(snap.data().upiId);
+      }
+    });
+  }, []);
+
   function handlePay() {
     if (!amount) return;
-    const uri = `upi://pay?pa=${UPI_ID}&pn=TechConnect&am=${amount}&tn=${encodeURIComponent(note || "Payment for TechConnect Services")}&cu=INR`;
+    const uri = `upi://pay?pa=${upiId}&pn=TechConnect&am=${amount}&tn=${encodeURIComponent(note || "Payment for TechConnect Services")}&cu=INR`;
     window.location.href = uri;
   }
 
@@ -27,11 +39,10 @@ export default function PaymentPage() {
             <p className="mt-2 text-gray-600 dark:text-gray-400">Pay securely via UPI (GPay / PhonePe / Paytm)</p>
           </div>
 
-          {/* QR Code */}
           <div className="mt-8 flex justify-center">
             <div className="rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700 bg-white p-6 text-center dark:bg-gray-800">
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=${UPI_ID}&pn=TechConnect&cu=INR`}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=${upiId}&pn=TechConnect&cu=INR`}
                 alt="UPI QR Code"
                 className="mx-auto h-48 w-48"
               />
@@ -39,9 +50,8 @@ export default function PaymentPage() {
             </div>
           </div>
 
-          {/* Manual Payment */}
           <div className="mt-8 rounded-xl bg-blue-50 p-5">
-            <p className="text-sm font-medium text-blue-800">UPI ID: <span className="font-bold">{UPI_ID}</span></p>
+            <p className="text-sm font-medium text-blue-800">UPI ID: <span className="font-bold">{upiId}</span></p>
           </div>
 
           <div className="mt-6 space-y-4">
@@ -58,7 +68,7 @@ export default function PaymentPage() {
             >Pay ₹{amount || "0"}</button>
           </div>
 
-          <div className="mt-6 flex items-center justify-center gap-4 text-sm text-gray-500 dark:text-gray-400 dark:text-gray-400">
+          <div className="mt-6 flex items-center justify-center gap-4 text-sm text-gray-500 dark:text-gray-400">
             <span>✅ GPay</span>
             <span>✅ PhonePe</span>
             <span>✅ Paytm</span>

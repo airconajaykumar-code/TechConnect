@@ -10,9 +10,15 @@ import {
   Platform,
   Animated,
 } from "react-native";
+import { ENGINEERS } from "../data";
+import { useTasks } from "../TaskContext";
 
 export default function LoginScreen({ navigation }: any) {
   const [phone, setPhone] = useState("");
+  const [pin, setPin] = useState("");
+  const [step, setStep] = useState<"phone" | "pin">("phone");
+  const matchedEngineer = useRef<any>(null);
+  const { setEngineer } = useTasks();
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -42,10 +48,35 @@ export default function LoginScreen({ navigation }: any) {
     return () => bounce.stop();
   }, []);
 
-  function handleLogin() {
-    if (phone.length < 10) {
-      Alert.alert("Error", "Please enter a valid phone number");
+  function handlePhoneSubmit() {
+    const cleaned = phone.replace(/\s+/g, "");
+    const match = ENGINEERS.find(
+      (e) => e.phone.replace(/\s+/g, "").includes(cleaned) || cleaned.includes(e.phone.replace(/\s+/g, ""))
+    );
+    if (!match) {
+      Alert.alert("Access Denied", "This phone number is not registered with TechConnect.");
       return;
+    }
+    matchedEngineer.current = match;
+    setStep("pin");
+  }
+
+  function handleLogin() {
+    if (pin !== "1234") {
+      Alert.alert("Wrong PIN", "Please enter the correct 4-digit PIN.");
+      return;
+    }
+    const eng = matchedEngineer.current;
+    if (eng) {
+      setEngineer({
+        name: eng.name,
+        phone: eng.phone,
+        profession: eng.profession,
+        location: eng.location,
+        totalTasks: 0,
+        totalEarnings: 0,
+        rating: 0,
+      });
     }
     navigation.replace("Tasks");
   }
@@ -68,18 +99,42 @@ export default function LoginScreen({ navigation }: any) {
         <Text style={styles.subtitle}>Engineer App</Text>
 
         <View style={styles.form}>
-          <Text style={styles.label}>Phone Number</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="+91 98765 43210"
-            placeholderTextColor="#9CA3AF"
-            keyboardType="phone-pad"
-            value={phone}
-            onChangeText={setPhone}
-          />
-          <TouchableOpacity style={styles.button} onPress={handleLogin}>
-            <Text style={styles.buttonText}>Login</Text>
-          </TouchableOpacity>
+          {step === "phone" ? (
+            <>
+              <Text style={styles.label}>Registered Phone Number</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="+91 88688 55921"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="phone-pad"
+                value={phone}
+                onChangeText={setPhone}
+              />
+              <TouchableOpacity style={styles.button} onPress={handlePhoneSubmit}>
+                <Text style={styles.buttonText}>Next</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.label}>Enter 4-Digit PIN</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="1234"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={4}
+                value={pin}
+                onChangeText={setPin}
+              />
+              <TouchableOpacity style={styles.button} onPress={handleLogin}>
+                <Text style={styles.buttonText}>Login</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => { setStep("phone"); setPin(""); }}>
+                <Text style={styles.backLink}>← Wrong number? Go back</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </Animated.View>
     </KeyboardAvoidingView>
@@ -130,7 +185,7 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: "white",
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: "#D1E5DB",
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
@@ -144,4 +199,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   buttonText: { color: "white", fontSize: 16, fontWeight: "600" },
+  backLink: { color: "#2563EB", textAlign: "center", marginTop: 16, fontSize: 14 },
 });

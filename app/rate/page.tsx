@@ -2,118 +2,115 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import type { Task, Engineer } from "@/lib/data";
+import { db } from "@/lib/firebase";
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, addDoc, Timestamp } from "firebase/firestore";
+import type { Task } from "@/lib/data";
 
 export default function RatePage() {
   const [phone, setPhone] = useState("");
-  const [engineers, setEngineers] = useState<Engineer[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [submitted, setSubmitted] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    const eng = localStorage.getItem("tc_engineers");
-    const tsk = localStorage.getItem("tc_tasks");
-    if (eng) setEngineers(JSON.parse(eng));
-    if (tsk) setTasks(JSON.parse(tsk));
-    const saved = localStorage.getItem("tc_ratings");
-    if (saved) setSubmitted(JSON.parse(saved));
+    const unsub = onSnapshot(
+      query(collection(db, "tasks"), where("status", "==", "completed"), orderBy("createdAt", "desc")),
+      (snap) => {
+        setTasks(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Task)));
+      }
+    );
+    return unsub;
   }, []);
 
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    const data = localStorage.getItem("tc_tasks");
-    if (data) {
-      const all: Task[] = JSON.parse(data);
-      setTasks(all.filter((t) => t.customerPhone.includes(phone) && t.status === "completed"));
+  const filtered = phone.trim()
+    ? tasks.filter((t) => t.customerPhone?.includes(phone.trim()))
+    : [];
+
+  async function submitRating(taskId: string, rating: number, engineerId?: string) {
+    await addDoc(collection(db, "ratings"), {
+      taskId,
+      engineerId: engineerId || "",
+      rating,
+      createdAt: Timestamp.now(),
+    });
+    if (engineerId) {
+      const engRef = doc(db, "engineers", engineerId);
+      const engSnap = await import("firebase/firestore").then((m) => m.getDoc(engRef));
+      if (engSnap.exists()) {
+        const eng = engSnap.data();
+        const currentRating = eng.rating || 0;
+        const taskCount = eng.totalTasks || 0;
+        const newRating = currentRating === 0 ? rating : (currentRating * taskCount + rating) / (taskCount + 1);
+        await updateDoc(engRef, { rating: Math.round(newRating * 10) / 10, totalTasks: taskCount + 1 });
+      }
     }
+    setSubmitted((prev) => ({ ...prev, [taskId]: true }));
   }
-
-  function submitRating(taskId: string, engineerId: string) {
-    const rating = ratings[taskId];
-    if (!rating) return;
-
-    const updated = { ...submitted, [taskId]: true };
-    setSubmitted(updated);
-    localStorage.setItem("tc_ratings", JSON.stringify(updated));
-
-    const eng = engineers.map((e) =>
-      e.id === engineerId
-        ? { ...e, rating: e.rating === 0 ? rating : (e.rating + rating) / 2, totalTasks: e.totalTasks + 1 }
-        : e
-    );
-    setEngineers(eng);
-    localStorage.setItem("tc_engineers", JSON.stringify(eng));
-  }
-
-  const completedTasks = tasks.filter((t) => t.status === "completed");
 
   return (
-    <main className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="mx-auto max-w-3xl px-6 py-16">
-        <Link href="/" className="mb-8 inline-flex items-center text-sm text-blue-600 hover:text-blue-700">← Back to Home</Link>
+    <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="mx-auto max-w-2xl px-6 py-16">
+        <div className="mb-12 text-center">
+          <Link href="/" className="mb-6 inline-flex items-center text-sm text-blue-600 hover:text-blue-700">← Back to Home</Link>
+          <h1 className="mt-4 text-4xl font-bold text-gray-900 dark:text-gray-100">Rate a Technician</h1>
+          <p className="mt-3 text-lg text-gray-600 dark:text-gray-400">Share your feedback on the service</p>
+        </div>
 
-        <div className="rounded-2xl bg-white p-8 shadow-sm dark:shadow-gray-900/50 dark:bg-gray-800">
-          <div className="text-center">
-            <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-100 text-3xl">⭐</div>
-            <h1 className="mt-4 text-3xl font-bold text-gray-900 dark:text-gray-100">Rate Your Technician</h1>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">Share your experience to help us improve</p>
+        <div className="mb-8">
+          <input
+            type="tel"
+            placeholder="Enter your phone number"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-6 py-4 text-lg text-gray-900 dark:text-gray-100 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:outline-none"
+          />
+        </div>
+
+        {phone.trim() && filtered.length === 0 && (
+          <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-600 bg-white p-12 text-center dark:bg-gray-800">
+            <p className="text-4xl">⭐</p>
+            <p className="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">No completed bookings found</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Complete a service first to rate it</p>
           </div>
+        )}
 
-          <form onSubmit={handleSearch} className="mt-8 flex gap-3">
-            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Your phone number" required
-              className="flex-1 rounded-xl border border-gray-300 dark:border-gray-600 px-4 py-3 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:outline-none dark:bg-gray-800" />
-            <button type="submit" className="rounded-xl bg-blue-600 px-6 py-3 font-medium text-white transition hover:bg-blue-700">Find Tasks</button>
-          </form>
+        <div className="space-y-6">
+          {filtered.map((task) => (
+            <div key={task.id} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white p-6 shadow-sm dark:shadow-gray-900/50 dark:bg-gray-800">
+              <div className="mb-4">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{task.title}</h2>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{task.customerName}</p>
+              </div>
 
-          {completedTasks.length > 0 && (
-            <div className="mt-8 space-y-4">
-              {completedTasks.map((task) => {
-                const eng = engineers.find((e) => e.id === task.assignedTo);
-                return (
-                  <div key={task.id} className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 p-6">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-bold text-gray-900 dark:text-gray-100">{task.title}</h3>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Technician: {eng?.name || "Unknown"}</p>
-                      </div>
-                      <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">Completed</span>
-                    </div>
-
-                    {submitted[task.id] ? (
-                      <div className="mt-4 rounded-xl bg-green-50 p-4 text-center">
-                        <p className="font-medium text-green-700">✅ Thank you! Rating submitted.</p>
-                      </div>
-                    ) : (
-                      <div className="mt-4">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm text-gray-600 dark:text-gray-400">Your rating:</p>
-                          <div className="flex gap-1">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <button key={star} onClick={() => setRatings({ ...ratings, [task.id]: star })}
-                                className={`text-2xl transition hover:scale-110 ${
-                                  (ratings[task.id] || 0) >= star ? "text-yellow-400" : "text-gray-300 dark:text-gray-500"
-                                }`}>★</button>
-                            ))}
-                          </div>
-                        </div>
-                        <button onClick={() => submitRating(task.id, task.assignedTo)} disabled={!ratings[task.id]}
-                          className="mt-3 rounded-xl bg-yellow-500 px-5 py-2 text-sm font-medium text-white transition hover:bg-yellow-600 disabled:opacity-50">
-                          Submit Rating
-                        </button>
-                      </div>
-                    )}
+              {submitted[task.id] ? (
+                <div className="rounded-lg bg-green-50 px-4 py-3 text-sm font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                  Thank you! Your rating has been submitted.
+                </div>
+              ) : (
+                <div>
+                  <p className="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">Rate your experience:</p>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        onClick={() => {
+                          setRatings((prev) => ({ ...prev, [task.id]: star }));
+                          submitRating(task.id, star, task.assignedTo);
+                        }}
+                        className={`h-12 w-12 rounded-lg text-2xl transition ${
+                          (ratings[task.id] || 0) >= star
+                            ? "bg-yellow-100 text-yellow-500 dark:bg-yellow-500/20"
+                            : "bg-gray-100 text-gray-300 dark:bg-gray-700 dark:text-gray-600"
+                        }`}
+                      >
+                        ★
+                      </button>
+                    ))}
                   </div>
-                );
-              })}
+                </div>
+              )}
             </div>
-          )}
-
-          {tasks.length > 0 && completedTasks.length === 0 && (
-            <div className="mt-8 rounded-xl bg-yellow-50 p-6 text-center text-sm text-yellow-700 dark:bg-gray-900">
-              No completed tasks found for this number
-            </div>
-          )}
+          ))}
         </div>
       </div>
     </main>

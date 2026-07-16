@@ -4,7 +4,7 @@ import { useTasks } from "../TaskContext";
 export default function ProfileScreen({ navigation }: any) {
   const { tasks, engineer } = useTasks();
   const completedTasks = tasks.filter((t) => t.status === "completed");
-  const totalEarnings = completedTasks.reduce((sum, t) => sum + t.yourPayout, 0);
+  const totalEarnings = completedTasks.reduce((sum, t) => sum + t.engineerPayout, 0);
   const activeTasks = tasks.filter((t) => t.status === "in_progress" || t.status === "assigned");
 
   return (
@@ -27,6 +27,7 @@ export default function ProfileScreen({ navigation }: any) {
           <Text style={styles.name}>{engineer.name}</Text>
           <Text style={styles.profession}>{engineer.profession}</Text>
           <Text style={styles.phone}>{engineer.phone}</Text>
+          {"location" in engineer && <Text style={styles.location}>📍 {(engineer as any).location}</Text>}
         </View>
 
         <View style={styles.statsRow}>
@@ -55,7 +56,7 @@ export default function ProfileScreen({ navigation }: any) {
             <Text style={[styles.earnValue, { color: "#F59E0B" }]}>
               ₹{tasks
                 .filter((t) => t.status !== "completed" && t.status !== "cancelled")
-                .reduce((sum, t) => sum + t.yourPayout, 0)}
+                .reduce((sum, t) => sum + t.engineerPayout, 0)}
             </Text>
           </View>
           <View style={styles.earnRow}>
@@ -115,6 +116,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 22, fontWeight: "800", color: "#1F2937" },
   profession: { fontSize: 14, color: "#2563EB", marginTop: 4 },
   phone: { fontSize: 14, color: "#6B7280", marginTop: 2 },
+  location: { fontSize: 13, color: "#9CA3AF", marginTop: 4 },
   statsRow: { flexDirection: "row", gap: 12, marginBottom: 16 },
   statCard: {
     flex: 1,

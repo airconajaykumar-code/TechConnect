@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { db } from "@/lib/firebase";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import type { Engineer, Task } from "@/lib/data";
 
 export default function FreelancerProfile() {
@@ -11,36 +13,15 @@ export default function FreelancerProfile() {
   const [tasks, setTasks] = useState<Task[]>([]);
 
   useEffect(() => {
-    const engData = localStorage.getItem("tc_engineers");
-    const taskData = localStorage.getItem("tc_tasks");
-
-    const SEED_BIO: Record<string, { bio: string; experience: string }> = {
-      "seed-1": {
-        bio: "CCTV Technician based in Haldwani with 8 years of experience in CCTV installation and networking.",
-        experience: "8 years",
-      },
-    };
-
-    if (engData) {
-      let engineers: Engineer[] = JSON.parse(engData);
-      let changed = false;
-      engineers = engineers.map((e) => {
-        const seed = SEED_BIO[e.id];
-        if (seed && (!e.bio || !e.experience)) {
-          changed = true;
-          return { ...e, bio: seed.bio, experience: seed.experience };
-        }
-        return e;
-      });
-      if (changed) {
-        localStorage.setItem("tc_engineers", JSON.stringify(engineers));
+    async function load() {
+      const engSnap = await getDoc(doc(db, "engineers", id));
+      if (engSnap.exists()) {
+        setEngineer({ id: engSnap.id, ...engSnap.data() } as Engineer);
       }
-      setEngineer(engineers.find((e) => e.id === id) || null);
+      const taskSnap = await getDocs(query(collection(db, "tasks"), where("assignedTo", "==", id)));
+      setTasks(taskSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Task)));
     }
-    if (taskData) {
-      const allTasks: Task[] = JSON.parse(taskData);
-      setTasks(allTasks.filter((t) => t.assignedTo === id));
-    }
+    load();
   }, [id]);
 
   if (!engineer) {
@@ -50,7 +31,7 @@ export default function FreelancerProfile() {
           <Link href="/freelancers" className="mb-8 inline-flex items-center text-sm text-blue-600 hover:text-blue-700">
             ← Back to Technicians
           </Link>
-          <div className="mt-8 text-center text-gray-500 dark:text-gray-400 dark:text-gray-500">Technician not found</div>
+          <div className="mt-8 text-center text-gray-500 dark:text-gray-400">Technician not found</div>
         </div>
       </main>
     );
@@ -74,11 +55,11 @@ export default function FreelancerProfile() {
                 {engineer.subscription.status === "active" ? (
                   <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">Available</span>
                 ) : (
-                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-500">Unavailable</span>
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">Unavailable</span>
                 )}
               </div>
               <p className="mt-1 text-lg text-blue-600">{engineer.profession}</p>
-              <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500">{engineer.phone}</p>
+              <p className="text-gray-500 dark:text-gray-400">{engineer.phone}</p>
             </div>
             <div className="flex items-center gap-1 text-lg font-medium text-gray-900 dark:text-gray-100">
               <span className="text-yellow-500">★</span>
@@ -109,7 +90,7 @@ export default function FreelancerProfile() {
 
           <div className="mt-8">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">About</h2>
-            <p className="mt-3 leading-relaxed text-gray-600 dark:text-gray-400 dark:text-gray-500">
+            <p className="mt-3 leading-relaxed text-gray-600 dark:text-gray-400">
               {engineer.bio || `${engineer.profession} based in ${engineer.location || "Haldwani"}. Completed ${engineer.totalTasks} tasks with a rating of ${engineer.rating || "new"}. Joined on ${engineer.joinedAt}.`}
             </p>
           </div>
@@ -125,7 +106,7 @@ export default function FreelancerProfile() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="font-medium text-gray-900 dark:text-gray-100">{task.title}</h3>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500">{task.customerName}</p>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{task.customerName}</p>
                     </div>
                     <span className="text-lg font-bold text-blue-600">₹{task.amount}</span>
                   </div>

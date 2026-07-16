@@ -25,7 +25,7 @@ function TaskCard({ task, onPress }: { task: Task; onPress: () => void }) {
       <Text style={styles.address} numberOfLines={1}>📍 {task.customerAddress}</Text>
       <View style={styles.cardFooter}>
         <Text style={styles.amount}>₹{task.amount}</Text>
-        <Text style={styles.payout}>Your payout: ₹{task.yourPayout}</Text>
+        <Text style={styles.payout}>Your payout: ₹{task.engineerPayout}</Text>
       </View>
     </TouchableOpacity>
   );

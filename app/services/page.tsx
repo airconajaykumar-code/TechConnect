@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, Timestamp } from "firebase/firestore";
 
 const services = [
   {
@@ -63,9 +65,18 @@ export default function ServicesPage() {
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", address: "", message: "" });
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const service = services.find((s) => s.id === selectedService);
+    await addDoc(collection(db, "serviceBookings"), {
+      serviceId: selectedService,
+      serviceTitle: service?.title,
+      customerName: form.name,
+      customerPhone: form.phone,
+      customerAddress: form.address,
+      message: form.message,
+      createdAt: Timestamp.now(),
+    });
     const msg =
       `🛠️ *New Service Booking*%0A%0A` +
       `*Service:* ${service?.title}%0A` +
